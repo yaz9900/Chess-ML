@@ -7,13 +7,13 @@ var EventEmitter = require('events').EventEmitter;
 const REWARD_DECAY_RATE = 0.97;
 const MEMORY_LENGTH = 10000
 
-var ReplayMemory =function(memlen) {
+var ReplayMemory =function(colour) {
+  this.colour = colour;  
   this.qold = [];
 
-  this.memoryLength = memlen;
+  this.memoryLength = 100;
    
-  this.nnWhite = model;
-  this.nnBlack = model;
+  this.model = model;
 
   this.runData = {
       rewards: [],
@@ -63,13 +63,13 @@ ReplayMemory.prototype.RandomBatch = function(batchSize){
 
 //Runs data through model to get Q values
 ReplayMemory.prototype.GetQValues = async function(tensor){
-    outputTensor = await this.nnWhite.predict(tensor)
+    outputTensor = await this.model.predict(tensor)
     return outputTensor;
 }
 
 //Teaches model on data passed to it
 ReplayMemory.prototype.TeachModel = function(){
-
+    
 }
 
 // does things

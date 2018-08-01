@@ -13,6 +13,7 @@
     "@tensorflow/tfjs-core": "^0.12.8",
     "@tensorflow/tfjs-node": "^0.1.9",
     "chess.js": "^0.10.2",
+    "forever": "^0.15.3",
     "lodash": "^4.17.10"
   },
   "devDependencies": {},

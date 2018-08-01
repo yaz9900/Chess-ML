@@ -3,6 +3,8 @@ var Chess = require('./node_modules/chess.js').Chess;
 const model = require('./models/firstModel') 
 const tf = require('@tensorflow/tfjs');
 var ReplayMemory = require('./ReplayMemory')
+var events = require('events');
+var eventEmitter = new events.EventEmitter();
 
 
 const PAWN =  'p'
@@ -49,40 +51,69 @@ const EMPTY             = [0,0,0,0,0,0,0,0,0,0,0,0]
 // const KING_BLACK_ARR    = [[0],[0],[0],[0],[0],[0],[0],[0],[0],[0],[0],[1]]
 
 // const EMPTY             = [[0],[0],[0],[0],[0],[0],[0],[0],[0],[0],[0],[0]]
-
+var chess = new Chess();
 
 var chessEnv = function(){
     this.chess = new Chess();
-    this.ReplayMemory = new ReplayMemory;
-
-    this.nnWhite = model;
-    this.nnBlack = model;
     this.board = this.chess.board();
+    this.ReplayMemory = new ReplayMemory
+
+    this.managedToTakeTurn = true;
 }
 
 chessEnv.prototype.TakeTurn = async function(){
-    stateTensor = AssembleBoardState(this.chess.board())
-    QTensor = await this.ReplayMemory.GetQValues(stateTensor);
-    console.log(await QTensor.data())
-    qnew = tf.argMax(QTensor,0)
-    console.log(await qnew.data())
+    this.stateTensor = AssembleBoardState(this.chess.board())
+    this.QTensor = await this.ReplayMemory.GetQValues(this.stateTensor);
+    this.ReplayMemory.LogQValues(this.QTensor)
 
-    // qnew = tf.argMax(qnew)
-    // console.log(qnew)
-    // qnew = tf.argMax(qnew)
-    // console.log(qnew)
-    // //qnew = tf.argMax(qnew)
-    // console.log(await qnew.data())
-
-    this.ReplayMemory.LogStates(stateTensor);
-    this.ReplayMemory.LogQValues(QTensor);
+    this.managedToTakeTurn = await this.TakeAction()  
     
+    if(!this.managedToTakeTurn){
+        await this.PunishFailedMove();
+    }else{
+        this.ReplayMemory.LogStates(this.stateTensor);
+        this.ReplayMemory.LogQValues(this.QTensor);
+    }
+    
+    eventEmitter.emit('end turn');
 }
 
 
+chessEnv.prototype.TakeAction = async function(){
 
-//console.log(chess.history())
-//console.log(chess.pgn());
+    index = await FindMaxQValueIndex(this.QTensor)
+    move = ParseMove(index)
+    console.log(index)
+    console.log(move)
+
+    results = chess.move(move)
+
+    if(results){
+        console.log("made a move")
+        console.log(results)
+        return true;
+    }else{
+        console.log("Failed to make a move")
+        return false;
+    }
+    
+}
+
+chessEnv.prototype.CheckGameState = function(){
+    if(chess.in_checkmate()){return false}
+    if(chess.in_draw()){return false}
+    if(chess.in_stalemate()){return false}
+    if(chess.insufficient_material()){return false}
+    return this.managedToTakeTurn;
+}
+chessEnv.prototype.ResetBoard = function(){
+    chess.reset();
+    this.managedToTakeTurn = true;
+}
+chessEnv.prototype.PunishFailedMove = async function(){
+    StateMask = 
+
+}
 
 AssembleBoardState = function(board){
     var state = []
@@ -113,21 +144,136 @@ AssembleBoardState = function(board){
     
     return tf.tensor4d([state]);
 }
+FindMaxQValueIndex = async function(tensor){
+    reducedTensor = tf.argMax(tensor, 3)   
+    var index = [[],[],[],[],[],[],[],[]];
+    for(xAxis = 0; xAxis<8; xAxis++){
+        for(yAxis = 0; yAxis<8; yAxis++){
+            temp = (await reducedTensor.slice([0,xAxis,yAxis],[1,1,1]).data())[0]
+            index[xAxis][yAxis] = (await tensor.slice([0,xAxis,yAxis,temp],[1,1,1,1]).data())[0]           
+        }
+    }
+    tempIndex = []
+    tempVal = []
+    for(i=0;i<8;i++){
+        tempIndex[i] = indexOfMax(index[i])
+        tempVal[i] = index[i][tempIndex[i]];
+    }
+    indexX = indexOfMax(tempVal)
+    indexY = tempIndex[indexX]
+    indexZ = (await reducedTensor.slice([0,indexX,indexY],[1,1,1]).data())[0]
+    return index = {
+        X: indexX,
+        Y: indexY,
+        Z: indexZ,
+    }
+}
+function indexOfMax(arr) {
+    if (arr.length === 0) {
+        return -1;
+    }
 
+    var max = arr[0];
+    var maxIndex = 0;
+
+    for (var i = 1; i < arr.length; i++) {
+        if (arr[i] > max) {
+            maxIndex = i;
+            max = arr[i];
+        }
+    }
+
+    return maxIndex;
+}
+ParseMove = function(index){
+    var toX = 0;
+    var toY = 0;
+    var indexZ = index.Z
+    var indexX = 8 - index.X
+    var from = ''+(8 - index.X)+String.fromCharCode(97 + index.Y);
+    if(index.Z<56){
+        if(indexZ<7){
+            toX= indexX + indexZ + 1;
+            toY= index.Y;
+        }else
+        if(index.Z<14){
+            indexZ = indexZ-7;
+            toX= indexX - indexZ - 1;
+            toY= index.Y;
+        }else
+        if(index.Z<21){
+            indexZ = indexZ- 14;
+            toX= indexX
+            toY= index.Y + indexZ + 1;
+        }else
+        if(index.Z<28){
+            indexZ = 21;
+            toX= indexX
+            toY= index.Y - indexZ - 1;
+        }else
+        if(index.Z<35){
+            indexZ =indexZ- 28;
+            toX= indexX + indexZ + 1;
+            toY= index.Y + indexZ + 1;
+        }else
+        if(index.Z<42){
+            indexZ =indexZ- 35;
+            toX= indexX - indexZ - 1;
+            toY= index.Y - indexZ - 1;
+        }else
+        if(index.Z<49){
+            indexZ =indexZ- 42;
+            toX= indexX + indexZ + 1;
+            toY= index.Y + indexZ - 1;
+        }else
+        if(index.Z<56){
+            indexZ =indexZ- 49;
+            toX= indexX - indexZ - 1;
+            toY= index.Y - indexZ + 1;
+        }
+    }else{
+        switch(index.Z){
+            case 56:
+                toX = indexX + 2
+                toY = index.Y + 1
+            case 57:
+                toX = indexX + 2
+                toY = index.Y - 1
+            case 58:
+                toX = indexX - 2
+                toY = index.Y + 1
+            case 59:
+                toX = indexX - 2
+                toY = index.Y - 1
+            case 60:
+                toX = indexX + 1
+                toY = index.Y + 2
+            case 61:
+                toX = indexX - 1
+                toY = index.Y + 2
+            case 62:
+                toX = indexX + 1
+                toY = index.Y - 2
+            case 63:
+                toX = indexX - 1
+                toY = index.Y - 2
+
+            case 64:
+                toX = indexX - 1
+                toY = index.Y - 2
+            // case 65:
+            // case 66:
+            // case 67:
+            // case 68:
+            // case 69:
+            // case 70:
+            // case 71:
+            // case 72:
+            // case 73:
+        }
+    }
+    var to = ''+toX+String.fromCharCode(97 + toY);
+    return {from: from, to: to}
+}
 
 module.exports = chessEnv;
-// stateTensor = AssembleBoardState(chess.board())
-
-// outputTensor = nnWhite.predict(stateTensor)
-
-// data = outputTensor.print()
-// console.log();
-
-
-
-// while (!chess.game_over()) {
-//   var moves = chess.moves();
-//   var move = moves[Math.floor(Math.random() * moves.length)];
-//   chess.move(move);
-  
-// }
