@@ -9,12 +9,13 @@
   "scripts": {},
   "author": "Ivan Trifonov",
   "dependencies": {
-    "@tensorflow/tfjs": "^0.12.3",
+    "@tensorflow/tfjs": "^0.12.4",
     "@tensorflow/tfjs-core": "^0.12.8",
     "@tensorflow/tfjs-node": "^0.1.9",
     "chess.js": "^0.10.2",
     "forever": "^0.15.3",
-    "lodash": "^4.17.10"
+    "lodash": "^4.17.10",
+    "python": "0.0.4"
   },
   "devDependencies": {},
   "engines": {
